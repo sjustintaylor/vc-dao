@@ -3,6 +3,8 @@ dotEnvConfig();
 
 import { HardhatUserConfig } from "hardhat/types";
 
+import "hardhat-deploy";
+import "@nomiclabs/hardhat-ethers";
 import "@nomiclabs/hardhat-waffle";
 import "@typechain/hardhat";
 import "@nomiclabs/hardhat-etherscan";
@@ -17,7 +19,7 @@ const ETHERSCAN_API_KEY = process.env.ETHERSCAN_API_KEY;
 const config: HardhatUserConfig = {
   defaultNetwork: "hardhat",
   solidity: {
-    compilers: [{ version: "0.7.6", settings: {} }],
+    compilers: [{ version: "0.8.9", settings: {} }],
   },
   networks: {
     hardhat: {},
@@ -34,6 +36,10 @@ const config: HardhatUserConfig = {
     // Your API key for Etherscan
     // Obtain one at https://etherscan.io/
     apiKey: ETHERSCAN_API_KEY,
+  },
+  namedAccounts: {
+    deployer: 0,
+    user: 1,
   },
 };
 

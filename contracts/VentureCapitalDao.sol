@@ -14,7 +14,8 @@ contract VCDAO {
 
     enum Status {
         Unprocessed,
-        Processed,
+        Succeeded,
+        Failed,
         Expended
     }
 
@@ -26,6 +27,7 @@ contract VCDAO {
 
     // 7 days
     uint256 public constant VOTING_PERIOD = 604800;
+    uint256 public constant FEE = 0.1 ether; // 0.1 ether fee
 
     // User => number of shares they hold
     mapping(address => uint256) public memberShares;
@@ -46,7 +48,7 @@ contract VCDAO {
     event ProcessProposal(
         uint256 indexed proposalId,
         Vote indexed outcome,
-        uint256 indexed winningCount
+        uint256 indexed count
     );
 
     event CastVote(
@@ -71,7 +73,7 @@ contract VCDAO {
     {
         require(recipient != address(0), "invalid recipient");
         require(address(this).balance >= amount, "insufficient funds");
-
+        require(msg.value >= FEE, "missing fee");
         proposals.push(
             Proposal(
                 recipient,
@@ -88,7 +90,7 @@ contract VCDAO {
 
     function processProposal(uint256 proposalId) external {
         require(
-            proposals[proposalId].proposalExpiry > block.timestamp,
+            proposals[proposalId].proposalExpiry < block.timestamp,
             "proposal still live"
         );
         require(
@@ -96,16 +98,18 @@ contract VCDAO {
             "already processed"
         );
         Proposal memory proposal = proposals[proposalId];
-        proposals[proposalId].state = Status.Processed;
 
         if (proposal.noVotes == proposal.yesVotes) {
-            emit ProcessProposal(proposalId, Vote.Null, 0);
+            emit ProcessProposal(proposalId, Vote.Null, proposal.yesVotes);
+            proposals[proposalId].state = Status.Failed;
         } else {
             if (proposal.yesVotes > proposal.noVotes) {
                 memberShares[proposal.recipient] += proposal.amountRequested;
                 emit ProcessProposal(proposalId, Vote.Yes, proposal.yesVotes);
+                proposals[proposalId].state = Status.Succeeded;
             } else {
                 emit ProcessProposal(proposalId, Vote.No, proposal.noVotes);
+                proposals[proposalId].state = Status.Failed;
             }
         }
     }
@@ -115,7 +119,7 @@ contract VCDAO {
         require(!memberVotes[proposalId][msg.sender], "already voted");
         require(vote == Vote.Yes || vote == Vote.No, "invalid vote");
         require(
-            proposals[proposalId].proposalExpiry <= block.timestamp,
+            proposals[proposalId].proposalExpiry >= block.timestamp,
             "proposal expired"
         );
 
@@ -132,7 +136,7 @@ contract VCDAO {
 
     function withdrawFunds(uint256 proposalId) external {
         Proposal memory proposal = proposals[proposalId];
-        require(proposal.state == Status.Processed, "unfinished proposal");
+        require(proposal.state == Status.Succeeded, "invalid proposal");
         require(msg.sender == proposal.recipient, "invalid user");
 
         proposals[proposalId].state = Status.Expended;
@@ -141,5 +145,9 @@ contract VCDAO {
         emit WithdrawFunds(proposal.recipient, proposal.amountRequested);
 
         proposal.recipient.transfer(proposal.amountRequested);
+    }
+
+    function getProposalCount() external view returns (uint256) {
+        return proposals.length;
     }
 }
